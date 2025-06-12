@@ -26,8 +26,6 @@ Advanced features is supposed to be added later:
 - --ignore <regex/matching> to ignore patterns
 - --adopt: used with -t, adopt a dir as a module then link/copy it to its original place
 
-
-
 ## Example
 
 A usecase is like:
@@ -47,6 +45,7 @@ Deploy all modules to your home directory with:
 cd dotfiles
 stor -t $HOME modules/*/
 ```
+
 This creates symlinks or copies from `modules/*/…` into `$HOME/…` while preserving relative paths.
 
 Since $HOME is the default target, the same result can be achieved with:
@@ -66,3 +65,13 @@ To see what will be changed, use `-n` or `--simulate` before you execute any act
 ```shell
 stor -n modules/*/
 ```
+
+## Install
+
+Install with cargo:
+
+```shell
+cargo install --git "https://github.com/levinion/stor"
+```
+
+AUR: *WIP*
