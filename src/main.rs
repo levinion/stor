@@ -37,7 +37,7 @@ struct Args {
         short = 'R',
         long = "restow",
         default_value_t = false,
-        help = "Restow (like stow -D followed by stow -S)"
+        help = "Restow (like stow -D followed by stow)"
     )]
     restow: bool,
     #[arg(

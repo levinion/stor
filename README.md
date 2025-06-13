@@ -74,4 +74,8 @@ Install with cargo:
 cargo install --git "https://github.com/levinion/stor"
 ```
 
-AUR: _WIP_
+AUR:
+
+```shell
+paru [or yay] -S stor
+```

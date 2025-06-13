@@ -13,7 +13,7 @@ __stor() {
         {-t,--target}"[Set target to DIR (default is $HOME)]" \
         {-n,--simulate}"[Do not actually make any filesystem changes]"\
         {-D,--delete}"[Unstow the package names]"\
-        {-R,--restow}"[Restow (like stow -D followed by stow -S)]"\
+        {-R,--restow}"[Restow (like stow -D followed by stow)]"\
         {-c,--copy}"[Copy instead of creating symlink]"\
         {-f,--overwrite}"[Delete if files/symlinks already exists]"\
         '*:filename:_files'
