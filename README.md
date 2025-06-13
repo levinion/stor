@@ -1,6 +1,6 @@
 # Stor
 
-Stor is an alternative for GNU Stow. It has more features and easy to use.
+Stor is an alternative to GNU Stow. It has more features and easy to use.
 
 ```shell
 stor -d home -t $HOME path/to/module
@@ -35,8 +35,8 @@ Assuming you have this structure:
 ```markdown
 dotfiles/
 └── modules/
-    ├── vim/
-    └── zsh/
+├── vim/
+└── zsh/
 ```
 
 Deploy all modules to your home directory with:
@@ -74,4 +74,4 @@ Install with cargo:
 cargo install --git "https://github.com/levinion/stor"
 ```
 
-AUR: *WIP*
+AUR: _WIP_
