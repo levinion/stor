@@ -54,6 +54,13 @@ struct Args {
         help = "Delete if files/symlinks already exists"
     )]
     overwrite: bool,
+    #[arg(
+        short = 'v',
+        long = "version",
+        default_value_t = false,
+        help = "Show version of stor"
+    )]
+    version: bool,
     modules: Vec<String>,
 }
 
@@ -71,6 +78,12 @@ impl Stor {
     }
 
     fn run(self) -> Result<()> {
+        // show version
+        if self.args.version {
+            let version = env!("CARGO_PKG_VERSION");
+            println!("stor version {}", version);
+        }
+        // range all input modules
         for module in &self.args.modules {
             // check input
             let module = module.parse::<PathBuf>().unwrap();
