@@ -1,0 +1,22 @@
+#compdef stor
+
+# Save this file as _stor in /usr/local/share/zsh/site-functions or in any
+# other folder in $fpath.  E.g. save it in a folder called ~/.zfunc and add a
+# line containing `fpath=(~/.zfunc $fpath)` somewhere before `compinit` in your
+# ~/.zshrc.
+
+__stor() {
+    # Give completions using the `_arguments` utility function with
+    _arguments -s \
+        {-v,--version}"[Show version of stor]" \
+        {-h,--help}"[Show list of command-line options]" \
+        {-t,--target}"[Set target to DIR (default is $HOME)]" \
+        {-n,--simulate}"[Do not actually make any filesystem changes]"\
+        {-D,--delete}"[Unstow the package names]"\
+        {-R,--restow}"[Restow (like stow -D followed by stow -S)]"\
+        {-c,--copy}"[Copy instead of creating symlink]"\
+        {-f,--overwrite}"[Delete if files/symlinks already exists]"\
+        '*:filename:_files'
+}
+
+__stor
