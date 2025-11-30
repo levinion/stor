@@ -3,7 +3,7 @@
 Stor is an alternative to GNU Stow. It has more features and easy to use.
 
 ```shell
-stor -d home -t $HOME path/to/module
+stor -t $HOME path/to/module
 ```
 
 Stor also has some flags like stow:
@@ -35,8 +35,8 @@ Assuming you have this structure:
 ```markdown
 dotfiles/
 └── modules/
-├── vim/
-└── zsh/
+    ├── vim/
+    └── zsh/
 ```
 
 Deploy all modules to your home directory with:
