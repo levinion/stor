@@ -1,4 +1,9 @@
+mod cli;
+
+use clap::Parser;
+
 use std::{
+    collections::HashSet,
     fs::read_dir,
     io::Write,
     os::unix::fs::symlink,
@@ -6,130 +11,45 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use clap::Parser;
 use colored::Colorize;
-use log::{error, info, warn};
 
-#[derive(Parser, Default)]
-struct Args {
-    #[arg(
-        short = 't',
-        long = "target",
-        help = "Set target to DIR (default is $HOME)"
-    )]
-    targetdir: Option<String>,
-    #[arg(
-        short = 'n',
-        long = "simulate",
-        alias = "no",
-        default_value_t = false,
-        help = "Do not actually make any filesystem changes"
-    )]
-    simulate: bool,
-    #[arg(
-        short = 'D',
-        long = "delete",
-        default_value_t = false,
-        help = "Unstow the package names"
-    )]
-    delete: bool,
-    #[arg(
-        short = 'R',
-        long = "restow",
-        default_value_t = false,
-        help = "Restow (like stow -D followed by stow)"
-    )]
-    restow: bool,
-    #[arg(
-        short = 'c',
-        long = "copy",
-        default_value_t = false,
-        help = "Copy instead of creating symlink"
-    )]
-    copy: bool,
-    #[arg(
-        short = 'f',
-        long = "overwrite",
-        default_value_t = false,
-        help = "Delete if files/symlinks already exists"
-    )]
-    overwrite: bool,
-    #[arg(
-        short = 'v',
-        long = "version",
-        default_value_t = false,
-        help = "Show version of stor"
-    )]
-    version: bool,
-    modules: Vec<String>,
-}
+use log::{debug, error, info, warn};
 
+#[derive(Default)]
 struct Stor {
-    args: Args,
+    args: cli::Args,
+    removed: HashSet<PathBuf>,
 }
 
 impl Stor {
-    fn new(mut args: Args) -> Stor {
+    fn new(mut args: cli::Args) -> Stor {
         // handle default values
-        if args.targetdir.is_none() {
-            args.targetdir = Some(home::home_dir().unwrap().to_str().unwrap().to_string());
+        if args.target_dir.is_none() {
+            args.target_dir = Some(home::home_dir().unwrap().to_str().unwrap().to_string());
         }
-        Self { args }
+        Self {
+            args,
+            ..Default::default()
+        }
     }
 
-    fn run(self) -> Result<()> {
+    fn print_version(self) {
+        let version = env!("CARGO_PKG_VERSION");
+        println!("stor version {}", version);
+    }
+
+    fn run(mut self) -> Result<()> {
         // show version
         if self.args.version {
-            let version = env!("CARGO_PKG_VERSION");
-            println!("stor version {}", version);
+            self.print_version();
+            return Ok(());
         }
         // range all input modules
-        for module in &self.args.modules {
+        for module in self.args.modules.clone() {
             // check input
             let module = module.parse::<PathBuf>().unwrap();
-            if !module.is_dir() {
-                warn!(
-                    "{}",
-                    format!(
-                        "Skip: module {} doesn't exists or is a file",
-                        module.display()
-                    )
-                    .yellow()
-                );
-                continue;
-            }
-            let target = self
-                .args
-                .targetdir
-                .as_ref()
-                .unwrap()
-                .parse::<PathBuf>()
-                .unwrap();
-            if !target.is_dir() {
-                warn!(
-                    "{}",
-                    format!(
-                        "Skip: target {} doesn't exists or is a file",
-                        target.display()
-                    )
-                    .yellow()
-                );
-                continue;
-            }
-
-            // turn into absolute path
-            let module = std::path::absolute(module).unwrap();
-            let target = std::path::absolute(target).unwrap();
-
-            // run commands
-            if self.args.delete {
-                // delete links and files
-                self.unstow(&module, &target, &module)?;
-            } else if self.args.restow {
-                self.restow(&module, &target, &module)?;
-            } else {
-                // create links and files
-                self.stow(&module, &target, &module)?;
+            if let Err(err) = self.deploy_module(module) {
+                error!("{}", err);
             }
         }
 
@@ -142,155 +62,213 @@ impl Stor {
         Ok(())
     }
 
-    fn copy_or_link(&self, path: &Path, target: &Path) -> Result<()> {
-        if self.args.copy {
-            // copy is enabled.
-            info!(
+    fn deploy_module(&mut self, module: PathBuf) -> Result<()> {
+        if !module.is_dir() {
+            warn!(
                 "{}",
-                format!("Copy: {} -> {}", path.display(), target.display()).cyan()
+                format!(
+                    "Skip: module {} doesn't exists or is a file",
+                    module.display()
+                )
+                .yellow()
             );
+            return Ok(());
+        }
+        let target = self
+            .args
+            .target_dir
+            .as_ref()
+            .unwrap()
+            .parse::<PathBuf>()
+            .unwrap();
+        if !target.is_dir() {
+            warn!(
+                "{}",
+                format!(
+                    "Skip: target {} doesn't exists or is a file",
+                    target.display()
+                )
+                .yellow()
+            );
+            return Ok(());
+        }
+
+        // turn into absolute path
+        let module = std::path::absolute(module).unwrap();
+        let target = std::path::absolute(target).unwrap();
+
+        // run commands
+        if self.args.delete {
+            // delete links and files
+            self.unstow(&module, &target, &module)?;
+        } else if self.args.restow {
+            self.restow(&module, &target, &module)?;
+        } else {
+            // create links and files
+            self.stow(&module, &target, &module)?;
+        }
+
+        Ok(())
+    }
+
+    fn copy(&mut self, path: &Path, target: &Path) -> Result<()> {
+        info!(
+            "{}",
+            format!("Copy: {} -> {}", path.display(), target.display()).cyan()
+        );
+        if path.is_dir() {
+            if !self.args.simulate {
+                let options = fs_extra::dir::CopyOptions::default();
+                fs_extra::dir::copy(path, target.parent().unwrap(), &options)?;
+            }
+        } else if path.is_file() {
+            #[allow(clippy::collapsible_if)]
+            if !self.args.simulate {
+                let options = fs_extra::file::CopyOptions::default();
+                fs_extra::file::copy(path, target, &options)?;
+            }
+        }
+        if self.removed.contains(target) {
+            self.removed.remove(target);
+        }
+        Ok(())
+    }
+
+    fn link(&mut self, path: &Path, target: &Path) -> Result<()> {
+        info!(
+            "{}",
+            format!("Link: {} -> {}", path.display(), target.display()).cyan()
+        );
+        if !self.args.simulate {
             if path.is_dir() {
-                if !self.args.simulate {
-                    let options = fs_extra::dir::CopyOptions::default();
-                    fs_extra::dir::copy(path, target.parent().unwrap(), &options)?;
-                }
+                symlink(path, target).map_err(|err| anyhow!(err))?;
             } else if path.is_file() {
-                #[allow(clippy::collapsible_if)]
+                symlink(path, target).map_err(|err| anyhow!(err))?;
+            }
+        }
+        if self.removed.contains(target) {
+            self.removed.remove(target);
+        }
+        Ok(())
+    }
+
+    fn remove(&mut self, target: &Path) -> Result<()> {
+        let action = if target.is_symlink() {
+            "Unlink"
+        } else {
+            "Delete"
+        };
+        if !self.args.delete {
+            if self.args.overwrite {
+                info!("{}", format!("{}: {}", action, target.display()).red());
+                self.removed.insert(target.to_path_buf());
                 if !self.args.simulate {
-                    let options = fs_extra::file::CopyOptions::default();
-                    fs_extra::file::copy(path, target, &options)?;
+                    fs_extra::remove_items(&[&target])?;
                 }
+            } else {
+                warn!(
+                    "{}",
+                    format!("Skip: {} is not overwritten", target.display()).yellow()
+                );
             }
         } else {
-            // copy is diabled, use default symlink.
-            info!(
-                "{}",
-                format!("Link: {} -> {}", path.display(), target.display()).cyan()
-            );
+            info!("{}", format!("{}: {}", action, target.display()).red());
+            self.removed.insert(target.to_path_buf());
             if !self.args.simulate {
-                if path.is_dir() {
-                    symlink(path, target).map_err(|err| anyhow!(err))?;
-                } else if path.is_file() {
-                    symlink(path, target).map_err(|err| anyhow!(err))?;
-                }
+                fs_extra::remove_items(&[&target])?;
             }
         }
         Ok(())
     }
 
-    fn stow(&self, module: &Path, targetdir: &Path, current: &Path) -> Result<()> {
+    fn exists(&self, target: &Path) -> bool {
+        if !self.args.simulate {
+            target.exists()
+        } else {
+            !self.removed.contains(target) && target.exists()
+        }
+    }
+
+    fn stow(&mut self, module: &Path, target_dir: &Path, current: &Path) -> Result<()> {
         for entry in read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
-            let target = get_relative_target(path.as_path(), module, targetdir);
+            let target = get_relative_target(path.as_path(), module, target_dir);
+
+            debug!(
+                "{}",
+                format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
+            );
 
             // if target is a symlink
-            if target.is_symlink() {
+            if self.exists(&target) && target.is_symlink() {
                 // if the copy flag is on, then try to overwrite, give up if overwrite flag is off
                 if self.args.copy {
-                    if self.args.overwrite {
-                        info!("{}", format!("Unlink: {}", target.display()).cyan());
-                        if !self.args.simulate {
-                            fs_extra::remove_items(&[&target])?;
-                        }
-                    } else {
-                        warn!(
-                            "{}",
-                            format!("Skip: {} is not overwritten", target.display()).yellow()
-                        );
-                        continue;
-                    }
+                    self.remove(&target)?;
                 } else {
                     // if the symlink already points to the target path, then skip, otherwise try overwrite.
                     let origin = std::fs::read_link(&target)?;
                     if origin == path {
                         info!(
                             "{}",
-                            format!("Skip: {} already exists", target.display()).cyan()
+                            format!("Skip: {} already exists", target.display()).yellow()
                         );
                         continue;
                     } else {
-                        #[allow(clippy::collapsible_else_if)]
-                        if self.args.overwrite {
-                            info!("{}", format!("Delete: {}", target.display()).cyan());
-                            if !self.args.simulate {
-                                fs_extra::remove_items(&[&target])?;
-                            }
-                        } else {
-                            warn!(
-                                "{}",
-                                format!("Skip: {} is not overwritten", target.display()).yellow()
-                            );
-                            continue;
-                        }
+                        self.remove(&target)?;
                     }
                 }
             }
 
             // try overwrite or skip if there's any target already exists
-            if path.is_file() && target.exists() {
-                if self.args.overwrite {
-                    warn!("{}", format!("Delete: {}", target.display()).yellow());
-                    if !self.args.simulate {
-                        fs_extra::remove_items(&[&target])?;
-                    }
-                } else {
-                    warn!(
-                        "{}",
-                        format!("Skip: {} is not overwritten, skip...", target.display()).yellow()
-                    );
-                    continue;
-                }
+            if self.exists(&target) && path.is_file() {
+                self.remove(&target)?;
             }
 
             // if target not exists, copy or link path to it.
-            if !target.exists() {
-                self.copy_or_link(&path, &target)?;
+            if !self.exists(&target) {
+                if self.args.copy {
+                    self.copy(&path, &target)?;
+                } else {
+                    self.link(&path, &target)?;
+                }
                 continue;
             }
 
             // if target is a dir, then repeat.
-            if target.is_dir() {
-                self.stow(module, targetdir, &path)?;
+            if self.exists(&target) && target.is_dir() {
+                self.stow(module, target_dir, &path)?;
             }
         }
         Ok(())
     }
 
-    fn unstow(&self, module: &Path, targetdir: &Path, current: &Path) -> Result<()> {
+    fn unstow(&mut self, module: &Path, target_dir: &Path, current: &Path) -> Result<()> {
         for entry in read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
-            let target = get_relative_target(path.as_path(), module, targetdir);
+            let target = get_relative_target(path.as_path(), module, target_dir);
 
             // if target exists, remove it
             if target.is_symlink() {
-                info!("{}", format!("Unlink: {}", target.display()).cyan());
-                if !self.args.simulate {
-                    fs_extra::remove_items(&[&target])?;
-                }
+                self.remove(&target)?;
             } else if target.is_file() {
-                info!("{}", format!("Delete: {}", target.display()).cyan());
-                if !self.args.simulate {
-                    fs_extra::remove_items(&[&target])?;
-                }
+                self.remove(&target)?;
                 // father is empty
                 if target.parent().unwrap().read_dir()?.next().is_none() {
-                    #[allow(clippy::collapsible_if)]
-                    if !self.args.simulate {
-                        fs_extra::remove_items(&[&target.parent().unwrap()])?;
-                    }
+                    self.remove(target.parent().unwrap())?;
                 }
             }
             // if target is a dir, then repeat.
             else if target.is_dir() {
-                self.unstow(module, targetdir, &path)?;
+                self.unstow(module, target_dir, &path)?;
             }
         }
         Ok(())
     }
 
-    fn restow(&self, module: &Path, targetdir: &Path, current: &Path) -> Result<()> {
+    // a wrapper of unstow and stow
+    fn restow(&mut self, module: &Path, targetdir: &Path, current: &Path) -> Result<()> {
         self.unstow(module, targetdir, current)?;
         self.stow(module, targetdir, current)?;
         Ok(())
@@ -304,8 +282,14 @@ fn get_relative_target(src: &Path, root: &Path, dst: &Path) -> PathBuf {
 }
 
 fn main() {
+    let args = cli::Args::parse();
+    let log_level = match (args.quiet, args.verbose) {
+        (true, false) => log::LevelFilter::Off,
+        (false, true) => log::LevelFilter::Debug,
+        _ => log::LevelFilter::Info,
+    };
     env_logger::builder()
-        .filter_level(log::LevelFilter::Info)
+        .filter_level(log_level)
         .format(|buf, record| {
             writeln!(
                 buf,
@@ -315,7 +299,6 @@ fn main() {
             )
         })
         .init();
-    let args = Args::parse();
     let stor = Stor::new(args);
     if let Err(err) = stor.run() {
         error!("{}", err);

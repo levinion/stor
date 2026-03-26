@@ -6,16 +6,20 @@ Stor is an alternative to GNU Stow. It has more features and easy to use.
 stor -t $HOME path/to/module
 ```
 
+![show](./assets/show.png)
+
 Stor also has some flags like stow:
 
 - -t, --target DIR: target dir (defaults to $HOME)
 - -n, --simulate: dry-run
 - -D, --delete: remove previously linked or copied items
+- -V, --version: show version number
 
 and feature new:
 
 - -c, --copy: copy instead of creating symlinks
 - -f, --overwrite: if target file/dir exists, overwrite it without ask
+- -v, --verbose / -q, --quiet: change log verbosity
 
 Some features are removed since not that useful:
 
@@ -23,7 +27,7 @@ Some features are removed since not that useful:
 
 Advanced features is supposed to be added later:
 
-- --ignore <regex/matching> to ignore patterns
+- --ignore <regex/glob> to ignore patterns
 - --adopt: used with -t, adopt a dir as a module then link/copy it to its original place
 
 ## Example
@@ -36,7 +40,7 @@ Assuming you have this structure:
 dotfiles/
 └── modules/
     ├── vim/
-    └── zsh/
+    └── ...
 ```
 
 Deploy all modules to your home directory with:
@@ -68,14 +72,22 @@ stor -n modules/*/
 
 ## Install
 
-Install with cargo:
+- Cargo:
 
 ```shell
 cargo install --git "https://github.com/levinion/stor"
 ```
 
-AUR:
+- AUR:
 
 ```shell
 paru [or yay] -S stor
+```
+
+- Git:
+
+```shell
+git clone "https://github.com/levinion/stor"
+cd stor
+make
 ```
