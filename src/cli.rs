@@ -65,5 +65,14 @@ pub struct Args {
         help = "Change log verbosity to Off"
     )]
     pub quiet: bool,
+    #[arg(short = 'I', long, help = "Ignore pattern")]
+    pub ignore: Vec<String>,
+    #[arg(
+        short = 'N',
+        long,
+        default_value_t = false,
+        help = "Do not execute hooks"
+    )]
+    pub disable_hooks: bool,
     pub modules: Vec<String>,
 }

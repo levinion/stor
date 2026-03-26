@@ -1,4 +1,5 @@
 mod cli;
+mod config;
 
 use clap::Parser;
 
@@ -8,12 +9,15 @@ use std::{
     io::Write,
     os::unix::fs::symlink,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use anyhow::{Result, anyhow};
 use colored::Colorize;
 
 use log::{debug, error, info, warn};
+
+use crate::config::Config;
 
 #[derive(Default)]
 struct Stor {
@@ -97,15 +101,24 @@ impl Stor {
         let module = std::path::absolute(module).unwrap();
         let target = std::path::absolute(target).unwrap();
 
+        // parse config
+        let mut config = Config::from(&module).unwrap_or_default();
+        config.ignore.push("stor.toml".to_string());
+        config.ignore.extend(self.args.ignore.clone());
+        debug!(
+            "{}",
+            format!("ignore: {:?}", config.ignore.clone()).truecolor(150, 150, 150)
+        );
+
         // run commands
         if self.args.delete {
             // delete links and files
-            self.unstow(&module, &target, &module)?;
+            self.unstow(&module, &target, &module, &config)?;
         } else if self.args.restow {
-            self.restow(&module, &target, &module)?;
+            self.restow(&module, &target, &module, &config)?;
         } else {
             // create links and files
-            self.stow(&module, &target, &module)?;
+            self.stow(&module, &target, &module, &config)?;
         }
 
         Ok(())
@@ -189,7 +202,30 @@ impl Stor {
         }
     }
 
-    fn stow(&mut self, module: &Path, target_dir: &Path, current: &Path) -> Result<()> {
+    fn execute_hook(&self, name: &str, hook: &str) -> Result<()> {
+        if !self.args.disable_hooks {
+            info!("{}", format!("{}: {}", name, hook).cyan());
+        } else {
+            warn!("{}", format!("Skip {}: {}", name, hook).yellow());
+        }
+        if !self.args.simulate && !self.args.disable_hooks {
+            Command::new("sh").args(["-c", hook]).status()?;
+        }
+        Ok(())
+    }
+
+    fn stow(
+        &mut self,
+        module: &Path,
+        target_dir: &Path,
+        current: &Path,
+        config: &Config,
+    ) -> Result<()> {
+        // pre-install hook
+        if let Some(hook) = &config.pre_install {
+            self.execute_hook("pre-install", hook)?;
+        }
+
         for entry in read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
@@ -199,6 +235,23 @@ impl Stor {
                 "{}",
                 format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
             );
+
+            // ignore matching pattern
+            let mut matched = false;
+            let relative_path = path.strip_prefix(module)?;
+            for pattern in &config.ignore {
+                if fast_glob::glob_match(pattern, relative_path.to_str().unwrap()) {
+                    matched = true;
+                    break;
+                }
+            }
+            if matched {
+                info!(
+                    "{}",
+                    format!("Skip: {} is ignored", path.display()).yellow()
+                );
+                continue;
+            }
 
             // if target is a symlink
             if self.exists(&target) && target.is_symlink() {
@@ -237,17 +290,56 @@ impl Stor {
 
             // if target is a dir, then repeat.
             if self.exists(&target) && target.is_dir() {
-                self.stow(module, target_dir, &path)?;
+                self.stow(module, target_dir, &path, config)?;
             }
         }
+
+        // post-install hook
+        if let Some(hook) = &config.post_install {
+            self.execute_hook("post-install", hook)?;
+        }
+
         Ok(())
     }
 
-    fn unstow(&mut self, module: &Path, target_dir: &Path, current: &Path) -> Result<()> {
+    fn unstow(
+        &mut self,
+        module: &Path,
+        target_dir: &Path,
+        current: &Path,
+        config: &Config,
+    ) -> Result<()> {
+        // pre-uninstall hook
+        if let Some(hook) = &config.pre_uninstall {
+            self.execute_hook("pre-uninstall", hook)?;
+        }
+
         for entry in read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
             let target = get_relative_target(path.as_path(), module, target_dir);
+
+            debug!(
+                "{}",
+                format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
+            );
+
+            // ignore matching pattern
+            let mut matched = false;
+            let relative_path = path.strip_prefix(module)?;
+            for pattern in &config.ignore {
+                if fast_glob::glob_match(pattern, relative_path.to_str().unwrap()) {
+                    matched = true;
+                    break;
+                }
+            }
+            if matched {
+                info!(
+                    "{}",
+                    format!("Skip: {} is ignored", path.display()).yellow()
+                );
+                continue;
+            }
 
             // if target exists, remove it
             if target.is_symlink() {
@@ -261,16 +353,28 @@ impl Stor {
             }
             // if target is a dir, then repeat.
             else if target.is_dir() {
-                self.unstow(module, target_dir, &path)?;
+                self.unstow(module, target_dir, &path, config)?;
             }
         }
+
+        // post-uninstall hook
+        if let Some(hook) = &config.post_uninstall {
+            self.execute_hook("post-uninstall", hook)?;
+        }
+
         Ok(())
     }
 
     // a wrapper of unstow and stow
-    fn restow(&mut self, module: &Path, targetdir: &Path, current: &Path) -> Result<()> {
-        self.unstow(module, targetdir, current)?;
-        self.stow(module, targetdir, current)?;
+    fn restow(
+        &mut self,
+        module: &Path,
+        targetdir: &Path,
+        current: &Path,
+        config: &Config,
+    ) -> Result<()> {
+        self.unstow(module, targetdir, current, config)?;
+        self.stow(module, targetdir, current, config)?;
         Ok(())
     }
 }

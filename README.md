@@ -20,6 +20,7 @@ and feature new:
 - -c, --copy: copy instead of creating symlinks
 - -f, --overwrite: if target file/dir exists, overwrite it without ask
 - -v, --verbose / -q, --quiet: change log verbosity
+- -I, --ignore \<glob> to ignore patterns
 
 Some features are removed since not that useful:
 
@@ -27,8 +28,8 @@ Some features are removed since not that useful:
 
 Advanced features is supposed to be added later:
 
-- --ignore <regex/glob> to ignore patterns
 - --adopt: used with -t, adopt a dir as a module then link/copy it to its original place
+- -i, --interactive: interactive mode, asking if there's different choices.
 
 ## Example
 
@@ -81,7 +82,7 @@ cargo install --git "https://github.com/levinion/stor"
 - AUR:
 
 ```shell
-paru [or yay] -S stor
+$AUR_HELPER -S stor
 ```
 
 - Git:

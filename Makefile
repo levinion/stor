@@ -3,7 +3,7 @@ install: build
 	sudo install -Dm 644 ./completions/zsh/_stor /usr/share/zsh/site-functions/
 
 build:
-	cargo build --release --locked
+	cargo build --release
 
 uninstall:
 	sudo rm /usr/bin/stor
