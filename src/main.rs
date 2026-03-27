@@ -231,11 +231,6 @@ impl Stor {
             let path = entry.path();
             let target = get_relative_target(path.as_path(), module, target_dir);
 
-            debug!(
-                "{}",
-                format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
-            );
-
             // ignore matching pattern
             let mut matched = false;
             let relative_path = path.strip_prefix(module)?;
@@ -246,12 +241,17 @@ impl Stor {
                 }
             }
             if matched {
-                info!(
+                debug!(
                     "{}",
-                    format!("Skip: {} is ignored", path.display()).yellow()
+                    format!("{} is ignored", path.display()).truecolor(150, 150, 150)
                 );
                 continue;
             }
+
+            debug!(
+                "{}",
+                format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
+            );
 
             // if target is a symlink
             if self.exists(&target) && target.is_symlink() {
@@ -319,11 +319,6 @@ impl Stor {
             let path = entry.path();
             let target = get_relative_target(path.as_path(), module, target_dir);
 
-            debug!(
-                "{}",
-                format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
-            );
-
             // ignore matching pattern
             let mut matched = false;
             let relative_path = path.strip_prefix(module)?;
@@ -333,13 +328,19 @@ impl Stor {
                     break;
                 }
             }
+
             if matched {
-                info!(
+                debug!(
                     "{}",
-                    format!("Skip: {} is ignored", path.display()).yellow()
+                    format!("{} is ignored", path.display()).truecolor(150, 150, 150)
                 );
                 continue;
             }
+
+            debug!(
+                "{}",
+                format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
+            );
 
             // if target exists, remove it
             if target.is_symlink() {
