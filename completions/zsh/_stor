@@ -6,17 +6,21 @@
 # ~/.zshrc.
 
 __stor() {
-    # Give completions using the `_arguments` utility function with
-    _arguments -s \
-        {-v,--version}"[Show version of stor]" \
-        {-h,--help}"[Show list of command-line options]" \
-        {-t,--target}"[Set target to DIR (default is $HOME)]" \
-        {-n,--simulate}"[Do not actually make any filesystem changes]"\
-        {-D,--delete}"[Unstow the package names]"\
-        {-R,--restow}"[Restow (like stow -D followed by stow)]"\
-        {-c,--copy}"[Copy instead of creating symlink]"\
-        {-f,--overwrite}"[Delete if files/symlinks already exists]"\
-        '*:filename:_files'
+  # Give completions using the `_arguments` utility function with
+  _arguments -s \
+    {-V,--version}"[Show version of stor]" \
+    {-h,--help}"[Show list of command-line options]" \
+    {-t,--target}"[Set target to DIR (default is \$HOME)]" \
+    {-n,--simulate,--dry-run}"[Do not actually make any filesystem changes]" \
+    {-D,--delete}"[Unstow the package names]" \
+    {-R,--restow}"[Restow (like stow -D followed by stow)]" \
+    {-c,--copy}"[Copy instead of creating symlink]" \
+    {-f,--overwrite}"[Delete if files/symlinks already exists]" \
+    {-v,--verbose}"[Change log verbosity to Debug]" \
+    {-q,--quiet}"[Change log verbosity to Off]" \
+    {-I,--ignore}"[Ignore pattern]" \
+    {-N,--disable-hooks}"[Do not execute hooks]" \
+    '*:filename:_files'
 }
 
 __stor

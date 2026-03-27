@@ -11,6 +11,7 @@ pub struct Args {
     #[arg(
         short = 'n',
         long = "simulate",
+        visible_alias = "dry-run",
         alias = "no",
         default_value_t = false,
         help = "Do not actually make any filesystem changes"

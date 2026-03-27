@@ -31,45 +31,6 @@ Advanced features is supposed to be added later:
 - --adopt: used with -t, adopt a dir as a module then link/copy it to its original place
 - -i, --interactive: interactive mode, asking if there's different choices.
 
-## Example
-
-A usecase is like:
-
-Assuming you have this structure:
-
-```markdown
-dotfiles/
-└── modules/
-    ├── vim/
-    └── ...
-```
-
-Deploy all modules to your home directory with:
-
-```shell
-cd dotfiles
-stor -t $HOME modules/*/
-```
-
-This creates symlinks or copies from `modules/*/…` into `$HOME/…` while preserving relative paths.
-
-Since $HOME is the default target, the same result can be achieved with:
-
-```shell
-stor modules/*/
-```
-
-To recover changes, you can use the flag `-D`:
-
-```shell
-stor -D modules/*/
-```
-
-To see what will be changed, use `-n` or `--simulate` before you execute any action:
-
-```shell
-stor -n modules/*/
-```
 
 ## Install
 
@@ -92,3 +53,76 @@ git clone "https://github.com/levinion/stor"
 cd stor
 make
 ```
+
+## Example
+
+A usecase is like:
+
+Assuming you have this structure:
+
+```markdown
+dotfiles/
+└── modules/
+    ├── nvim/.config/nvim/init.lua
+    └── ...
+```
+
+Deploy all modules to your home directory with:
+
+```shell
+cd dotfiles
+stor -t $HOME modules/*/
+```
+
+This creates symlinks or copies from `modules/*/…` into `$HOME/…` while preserving relative paths.
+
+For example, `dotfiles/modules/nvim/.config/nvim` will be linked to `$HOME/.config/nvim`.
+
+Since $HOME is the default target, the same result can be achieved with:
+
+```shell
+stor modules/*/
+```
+
+---
+
+To recover changes, you can use the flag `-D`:
+
+```shell
+stor -D modules/*/
+```
+
+That means, `stor -D modules/nvim` will unlink the linked `$HOME/.config/nvim` directory.
+
+---
+
+To see what will be changed, use `-n` or `--simulate` before you execute any action:
+
+```shell
+stor -n modules/*/
+```
+
+## Advanced
+
+Stor allows per-module configuration via a stor.toml file located at the root of each module (e.g., `<module_name>/stor.toml`).
+
+The configuration file and all its fields are optional.
+
+```toml
+# Runs before installing module 
+pre_install = "echo 'Installing module...'"
+
+# Runs after all module are installed
+post_install = "read -p 'Press enter to continue...'"
+
+# Runs before removing module
+pre_uninstall = "echo 'Cleaning up...'"
+
+# Runs after module is removed
+post_uninstall = "echo 'Module uninstalled'"
+
+# Patterns to exclude from stor
+ignore = ["**/.git", "**/.DS_Store"]
+```
+
+You could use `-N` or `--disable-hooks` to disable hooks if you don't like it.
