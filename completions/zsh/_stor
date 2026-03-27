@@ -20,6 +20,7 @@ __stor() {
     {-q,--quiet}"[Change log verbosity to Off]" \
     {-I,--ignore}"[Ignore pattern]" \
     {-N,--disable-hooks}"[Do not execute hooks]" \
+    {-i,--interactive}"[Run in interactive mode]" \
     '*:filename:_files'
 }
 

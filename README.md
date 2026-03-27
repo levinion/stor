@@ -25,11 +25,11 @@ and feature new:
 Some features are removed since not that useful:
 
 - -d, --dir DIR is used to set workdir, but now module supports a path rather than a name.
+- -i, --interactive: interactive mode, asking if there's different choices.
 
 Advanced features is supposed to be added later:
 
 - --adopt: used with -t, adopt a dir as a module then link/copy it to its original place
-- -i, --interactive: interactive mode, asking if there's different choices.
 
 
 ## Install

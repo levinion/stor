@@ -75,5 +75,7 @@ pub struct Args {
         help = "Do not execute hooks"
     )]
     pub disable_hooks: bool,
+    #[arg(short, long, default_value_t = false, help = "Run in interactive mode")]
+    pub interactive: bool,
     pub modules: Vec<String>,
 }

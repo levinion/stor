@@ -2,6 +2,7 @@ mod cli;
 mod config;
 
 use clap::Parser;
+use inquire::Confirm;
 
 use std::{
     collections::HashSet,
@@ -13,7 +14,7 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 
 use log::{debug, error, info, warn};
 
@@ -124,11 +125,23 @@ impl Stor {
         Ok(())
     }
 
+    fn confirm(&self, message: ColoredString) -> bool {
+        if !self.args.interactive {
+            return true;
+        }
+        Confirm::new(&message.to_string())
+            .with_default(true)
+            .prompt()
+            .unwrap_or(true)
+    }
+
     fn copy(&mut self, path: &Path, target: &Path) -> Result<()> {
-        info!(
-            "{}",
-            format!("Copy: {} -> {}", path.display(), target.display()).cyan()
-        );
+        let info = format!("Copy: {} -> {}", path.display(), target.display()).cyan();
+        if !self.args.interactive {
+            info!("{}", info);
+        } else if !self.confirm(info) {
+            return Ok(());
+        }
         if path.is_dir() {
             if !self.args.simulate {
                 let options = fs_extra::dir::CopyOptions::default();
@@ -148,10 +161,12 @@ impl Stor {
     }
 
     fn link(&mut self, path: &Path, target: &Path) -> Result<()> {
-        info!(
-            "{}",
-            format!("Link: {} -> {}", path.display(), target.display()).cyan()
-        );
+        let info = format!("Link: {} -> {}", path.display(), target.display()).cyan();
+        if !self.args.interactive {
+            info!("{}", info);
+        } else if !self.confirm(info) {
+            return Ok(());
+        }
         if !self.args.simulate {
             if path.is_dir() {
                 symlink(path, target).map_err(|err| anyhow!(err))?;
@@ -171,21 +186,35 @@ impl Stor {
         } else {
             "Delete"
         };
+        let info = format!("{}: {}", action, target.display()).red();
         if !self.args.delete {
             if self.args.overwrite {
-                info!("{}", format!("{}: {}", action, target.display()).red());
+                if !self.args.interactive {
+                    info!("{}", info);
+                } else if !self.confirm(info) {
+                    return Ok(());
+                }
                 self.removed.insert(target.to_path_buf());
                 if !self.args.simulate {
                     fs_extra::remove_items(&[&target])?;
                 }
-            } else {
+            } else if !self.args.interactive {
                 warn!(
                     "{}",
                     format!("Skip: {} is not overwritten", target.display()).yellow()
                 );
+            } else if self.confirm(info) {
+                self.removed.insert(target.to_path_buf());
+                if !self.args.simulate {
+                    fs_extra::remove_items(&[&target])?;
+                }
             }
         } else {
-            info!("{}", format!("{}: {}", action, target.display()).red());
+            if !self.args.interactive {
+                info!("{}", info);
+            } else if !self.confirm(info) {
+                return Ok(());
+            }
             self.removed.insert(target.to_path_buf());
             if !self.args.simulate {
                 fs_extra::remove_items(&[&target])?;
@@ -204,7 +233,12 @@ impl Stor {
 
     fn execute_hook(&self, name: &str, hook: &str) -> Result<()> {
         if !self.args.disable_hooks {
-            info!("{}", format!("{}: {}", name, hook).cyan());
+            let info = format!("{}: {}", name, hook).cyan();
+            if !self.args.interactive {
+                info!("{}", info);
+            } else if !self.confirm(info) {
+                return Ok(());
+            }
         } else {
             warn!("{}", format!("Skip {}: {}", name, hook).yellow());
         }
