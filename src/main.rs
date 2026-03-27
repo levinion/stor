@@ -248,9 +248,16 @@ impl Stor {
                 continue;
             }
 
+            let exist = if self.exists(&target) {
+                " (exists)"
+            } else {
+                ""
+            };
+
             debug!(
                 "{}",
-                format!("{} -> {}", path.display(), target.display()).truecolor(150, 150, 150)
+                format!("{} -> {}{}", path.display(), target.display(), exist)
+                    .truecolor(150, 150, 150)
             );
 
             // if target is a symlink
