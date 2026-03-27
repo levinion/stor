@@ -8,3 +8,5 @@ build:
 uninstall:
 	sudo rm /usr/bin/stor
 	sudo rm /usr/share/zsh/site-functions/_stor
+
+.PHONY: install build uninstall
