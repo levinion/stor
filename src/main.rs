@@ -233,7 +233,7 @@ impl Stor {
 
     fn execute_hook(&self, name: &str, hook: &str) -> Result<()> {
         if !self.args.disable_hooks {
-            let info = format!("{}: {}", name, hook).cyan();
+            let info = format!("{}: {}", name, hook).white();
             if !self.args.interactive {
                 info!("{}", info);
             } else if !self.confirm(info) {
@@ -256,7 +256,9 @@ impl Stor {
         config: &Config,
     ) -> Result<()> {
         // pre-install hook
-        if let Some(hook) = &config.pre_install {
+        if let Some(hook) = &config.pre_install
+            && current == module
+        {
             self.execute_hook("pre-install", hook)?;
         }
 
@@ -336,7 +338,9 @@ impl Stor {
         }
 
         // post-install hook
-        if let Some(hook) = &config.post_install {
+        if let Some(hook) = &config.post_install
+            && current == module
+        {
             self.execute_hook("post-install", hook)?;
         }
 
@@ -351,7 +355,9 @@ impl Stor {
         config: &Config,
     ) -> Result<()> {
         // pre-uninstall hook
-        if let Some(hook) = &config.pre_uninstall {
+        if let Some(hook) = &config.pre_uninstall
+            && current == module
+        {
             self.execute_hook("pre-uninstall", hook)?;
         }
 
@@ -400,7 +406,9 @@ impl Stor {
         }
 
         // post-uninstall hook
-        if let Some(hook) = &config.post_uninstall {
+        if let Some(hook) = &config.post_uninstall
+            && current == module
+        {
             self.execute_hook("post-uninstall", hook)?;
         }
 
