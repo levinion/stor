@@ -102,6 +102,21 @@ To see what will be changed, use `-n` or `--simulate` before you execute any act
 stor -n modules/*/
 ```
 
+In a rare case, default files might already exist before you stor a module. 
+For example, `dotfiles/plasmazones/.config/plasmazones/config.json` already exist before running stor but you want to cleanup the directory before symbolic linking.
+
+To remove the current files and then link
+```shell
+stor -R -f plamsazones
+```
+
+Example output
+```shell
+❯ stor -R -f plasmazones/
+[INFO] Delete: /$HOME/.config/plasmazones/config.json
+[INFO] Link: /$HOME/dotfiles/plasmazones/.config/plasmazones -> /$HOME/.config/plasmazones
+```
+
 ## Advanced
 
 Stor allows per-module configuration via a stor.toml file located at the root of each module (e.g., `<module_name>/stor.toml`).
