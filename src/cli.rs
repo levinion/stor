@@ -46,6 +46,12 @@ pub struct Args {
     )]
     pub overwrite: bool,
     #[arg(
+        long,
+        default_value_t = false,
+        help = "Adopt existing files/dirs in the target into the module"
+    )]
+    pub adopt: bool,
+    #[arg(
         short = 'V',
         long = "version",
         default_value_t = false,
@@ -68,13 +74,6 @@ pub struct Args {
     pub quiet: bool,
     #[arg(short = 'I', long, help = "Ignore pattern")]
     pub ignore: Vec<String>,
-    #[arg(
-        short = 'N',
-        long,
-        default_value_t = false,
-        help = "Do not execute hooks"
-    )]
-    pub disable_hooks: bool,
     #[arg(short, long, default_value_t = false, help = "Run in interactive mode")]
     pub interactive: bool,
     pub modules: Vec<String>,

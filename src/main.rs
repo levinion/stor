@@ -10,7 +10,6 @@ use std::{
     io::Write,
     os::unix::fs::symlink,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use anyhow::{Result, anyhow};
@@ -103,7 +102,7 @@ impl Stor {
         let target = std::path::absolute(target).unwrap();
 
         // parse config
-        let mut config = Config::from(&module).unwrap_or_default();
+        let mut config = Config::from(&module)?;
         config.ignore.push("stor.toml".to_string());
         config.ignore.extend(self.args.ignore.clone());
         debug!(
@@ -231,20 +230,34 @@ impl Stor {
         }
     }
 
-    fn execute_hook(&self, name: &str, hook: &str) -> Result<()> {
-        if !self.args.disable_hooks {
-            let info = format!("{}: {}", name, hook).white();
-            if !self.args.interactive {
-                info!("{}", info);
-            } else if !self.confirm(info) {
-                return Ok(());
+    // adopt: move an existing target file/dir into the module location, so it
+    // can then be linked/copied back to its original place.
+    fn adopt(&mut self, target: &Path, path: &Path) -> Result<()> {
+        let info = format!("Adopt: {} -> {}", target.display(), path.display()).cyan();
+        if !self.args.interactive {
+            info!("{}", info);
+        } else if !self.confirm(info) {
+            return Ok(());
+        }
+        if !self.args.simulate {
+            if target.is_dir() {
+                // move the contents of the target dir into the (empty) module dir
+                let options = fs_extra::dir::CopyOptions {
+                    overwrite: true,
+                    content_only: true,
+                    ..Default::default()
+                };
+                fs_extra::dir::move_dir(target, path, &options)?;
+            } else {
+                // move the target file over the module copy (if any)
+                let options = fs_extra::file::CopyOptions {
+                    overwrite: true,
+                    ..Default::default()
+                };
+                fs_extra::file::move_file(target, path, &options)?;
             }
-        } else {
-            warn!("{}", format!("Skip {}: {}", name, hook).yellow());
         }
-        if !self.args.simulate && !self.args.disable_hooks {
-            Command::new("sh").args(["-c", hook]).status()?;
-        }
+        self.removed.insert(target.to_path_buf());
         Ok(())
     }
 
@@ -255,13 +268,6 @@ impl Stor {
         current: &Path,
         config: &Config,
     ) -> Result<()> {
-        // pre-install hook
-        if let Some(hook) = &config.pre_install
-            && current == module
-        {
-            self.execute_hook("pre-install", hook)?;
-        }
-
         for entry in read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
@@ -316,6 +322,45 @@ impl Stor {
                 }
             }
 
+            // adopt existing target into the module if requested
+            if self.exists(&target) && self.args.adopt {
+                if path == target {
+                    warn!(
+                        "{}",
+                        format!(
+                            "Skip: {} is the module itself, cannot adopt",
+                            target.display()
+                        )
+                        .yellow()
+                    );
+                    continue;
+                }
+                if path.is_dir() && target.is_dir() {
+                    // both are dirs: if the module dir is empty, adopt the whole
+                    // target dir; otherwise merge it entry by entry
+                    if read_dir(&path)?.next().is_none() {
+                        self.adopt(&target, &path)?;
+                    } else {
+                        self.stow(module, target_dir, &path, config)?;
+                        continue;
+                    }
+                } else if target.is_dir() || path.is_dir() {
+                    // a file and a dir cannot be merged
+                    warn!(
+                        "{}",
+                        format!(
+                            "Skip: cannot adopt {} over {}",
+                            path.display(),
+                            target.display()
+                        )
+                        .yellow()
+                    );
+                    continue;
+                } else {
+                    self.adopt(&target, &path)?;
+                }
+            }
+
             // try overwrite or skip if there's any target already exists
             if self.exists(&target) && path.is_file() {
                 self.remove(&target)?;
@@ -337,13 +382,6 @@ impl Stor {
             }
         }
 
-        // post-install hook
-        if let Some(hook) = &config.post_install
-            && current == module
-        {
-            self.execute_hook("post-install", hook)?;
-        }
-
         Ok(())
     }
 
@@ -354,13 +392,6 @@ impl Stor {
         current: &Path,
         config: &Config,
     ) -> Result<()> {
-        // pre-uninstall hook
-        if let Some(hook) = &config.pre_uninstall
-            && current == module
-        {
-            self.execute_hook("pre-uninstall", hook)?;
-        }
-
         for entry in read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
@@ -394,22 +425,16 @@ impl Stor {
                 self.remove(&target)?;
             } else if target.is_file() {
                 self.remove(&target)?;
-                // father is empty
-                if target.parent().unwrap().read_dir()?.next().is_none() {
-                    self.remove(target.parent().unwrap())?;
+                // father is empty; prune it, but never the target dir itself
+                let parent = target.parent().unwrap();
+                if parent != target_dir && parent.read_dir()?.next().is_none() {
+                    self.remove(parent)?;
                 }
             }
             // if target is a dir, then repeat.
             else if target.is_dir() {
                 self.unstow(module, target_dir, &path, config)?;
             }
-        }
-
-        // post-uninstall hook
-        if let Some(hook) = &config.post_uninstall
-            && current == module
-        {
-            self.execute_hook("post-uninstall", hook)?;
         }
 
         Ok(())

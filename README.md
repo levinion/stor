@@ -1,6 +1,6 @@
 # Stor
 
-Stor is an alternative to GNU Stow. It has more features and easy to use.
+Stor is an alternative to GNU Stow. It has more features and is easy to use.
 
 ```shell
 stor -t $HOME path/to/module
@@ -8,29 +8,64 @@ stor -t $HOME path/to/module
 
 ![show](./assets/show.png)
 
-Stor also has some flags like stow:
+## Quick start
 
-- -t, --target DIR: target dir (defaults to $HOME)
-- -n, --simulate: dry-run
-- -D, --delete: remove previously linked or copied items
-- -V, --version: show version number
+A *module* is a directory whose contents mirror paths relative to the target
+directory (by default `$HOME`). `stor` walks the module and creates symlinks in
+the target, preserving relative paths.
 
-and feature new:
+Say your dotfiles repo looks like this:
 
-- -c, --copy: copy instead of creating symlinks
-- -f, --overwrite: if target file/dir exists, overwrite it without ask
-- -v, --verbose / -q, --quiet: change log verbosity
-- -I, --ignore \<glob> to ignore patterns
+```
+dotfiles/
+├── git/
+│   └── .gitconfig
+└── nvim/
+    └── .config/
+        └── nvim/
+            └── init.lua
+```
 
-Some features are removed since not that useful:
+Deploy everything to `$HOME` (assuming `~/.config` already exists, as it does
+on most machines):
 
-- -d, --dir DIR is used to set workdir, but now module supports a path rather than a name.
-- -i, --interactive: interactive mode, asking if there's different choices.
+```shell
+cd dotfiles
+stor -t $HOME git nvim
+```
 
-Advanced features is supposed to be added later:
+```
+[INFO] Link: /home/you/dotfiles/git/.gitconfig -> /home/you/.gitconfig
+[INFO] Link: /home/you/dotfiles/nvim/.config/nvim -> /home/you/.config/nvim
+```
 
-- --adopt: used with -t, adopt a dir as a module then link/copy it to its original place
+Result:
 
+```
+~/
+├── .config/
+│   └── nvim      -> dotfiles/nvim/.config/nvim
+└── .gitconfig    -> dotfiles/git/.gitconfig
+```
+
+Since `$HOME` is the default target, the same thing can be written as:
+
+```shell
+stor git nvim
+```
+
+Multiple modules, globs and full paths all work:
+
+```shell
+stor modules/*/
+stor /path/to/dotfiles/git /path/to/dotfiles/nvim
+```
+
+> **Note:** `stor` links the *outermost* path that does not exist in the target
+> yet. Because `~/.config` already existed above, `~/.config/nvim` was linked.
+> On a machine without `~/.config` (e.g. a fresh install), the whole directory
+> would be linked instead: `~/.config -> dotfiles/nvim/.config`. Either way,
+> the relative layout inside the module is preserved.
 
 ## Install
 
@@ -54,75 +89,150 @@ cd stor
 make
 ```
 
-## Example
+## Flags
 
-A usecase is like:
+| Flag | Description |
+| --- | --- |
+| `-t, --target DIR` | target directory (defaults to `$HOME`) |
+| `-n, --simulate` | dry-run; print what would happen, change nothing |
+| `-D, --delete` | unstow: remove previously linked/copied items |
+| `-R, --restow` | unstow then stow again |
+| `-c, --copy` | copy instead of creating symlinks |
+| `-f, --overwrite` | replace existing files/dirs instead of skipping them |
+| `-v, --verbose` / `-q, --quiet` | change log verbosity |
+| `-I, --ignore <GLOB>` | ignore matching patterns (repeatable) |
+| `--adopt` | adopt existing files/dirs in the target into the module, then link/copy them back |
+| `-i, --interactive` | ask for confirmation before each action |
+| `-V, --version` | show version |
 
-Assuming you have this structure:
+Removed since they weren't that useful:
 
-```markdown
-dotfiles/
-└── modules/
-    ├── nvim/.config/nvim/init.lua
-    └── ...
-```
+- `-d, --dir DIR` — used to set the working directory; modules are now given as paths, so a separate workdir is unnecessary.
 
-Deploy all modules to your home directory with:
+## Examples
 
-```shell
-cd dotfiles
-stor -t $HOME modules/*/
-```
+### See what will change (dry-run)
 
-This creates symlinks or copies from `modules/*/…` into `$HOME/…` while preserving relative paths.
-
-For example, `dotfiles/modules/nvim/.config/nvim` will be linked to `$HOME/.config/nvim`.
-
-Since $HOME is the default target, the same result can be achieved with:
-
-```shell
-stor modules/*/
-```
-
----
-
-To recover changes, you can use the flag `-D`:
+Before touching anything, preview what `stor` would do. Nothing is modified:
 
 ```shell
-stor -D modules/*/
+stor -n nvim
 ```
 
-That means, `stor -D modules/nvim` will unlink the linked `$HOME/.config/nvim` directory.
+```
+[INFO] Link: /home/you/dotfiles/nvim/.config/nvim -> /home/you/.config/nvim
+[WARN] Simulate: in simulation mode so not modifying filesystem.
+```
 
----
+### Copy instead of linking
 
-To see what will be changed, use `-n` or `--simulate` before you execute any action:
+Some programs rewrite their config in place, or you may want each machine to
+have its own independent copy. Use `-c` to copy the files instead of linking
+them:
 
 ```shell
-stor -n modules/*/
+stor -c nvim
 ```
 
-## Advanced
+Keep in mind copies are one-way: edits made under `$HOME` do not propagate back
+into the module (with symlinks they do, since both paths point to the same
+file).
 
-Stor allows per-module configuration via a stor.toml file located at the root of each module (e.g., `<module_name>/stor.toml`).
+### Overwrite existing files
 
-The configuration file and all its fields are optional.
+By default `stor` leaves existing files alone and prints a warning:
+
+```
+[WARN] Skip: /home/you/.gitconfig is not overwritten
+```
+
+To replace them, add `-f`:
+
+```shell
+stor -f git
+```
+
+### Ignore files and directories
+
+Skip patterns with `-I` (repeatable, glob syntax). Patterns also apply on
+unstow/restow, so ignored files are left untouched in the target:
+
+```shell
+stor -I '**/.git' -I '**/node_modules' nvim
+```
+
+### Undo (unstow)
+
+Remove everything a module linked/copied into the target:
+
+```shell
+stor -D nvim
+```
+
+```
+[INFO] Unlink: /home/you/.config/nvim
+```
+
+Empty parent directories created for the links are cleaned up too. The target
+directory itself is never removed, and the module directory is left untouched.
+
+### Restow
+
+When a linked file was replaced by a real file (e.g. an app wrote to it),
+re-create the links with `-R` (unstow, then stow again):
+
+```shell
+stor -R nvim          # will not clobber real files
+stor -R -f nvim       # force: replace real files and link again
+```
+
+### Adopt existing files
+
+You have been configuring a machine by hand and want to version-control those
+files. `--adopt` moves the live files from the target into the module, then
+links them back:
+
+```shell
+# ~/.config/nvim/  contains your hand-tuned real config
+# modules/nvim/    contains placeholders (or is empty)
+stor --adopt nvim
+```
+
+```
+[INFO] Adopt: /home/you/.config/nvim -> /home/you/dotfiles/nvim/.config/nvim
+[INFO] Link: /home/you/dotfiles/nvim/.config/nvim -> /home/you/.config/nvim
+```
+
+The live files now live in the repo and are managed by `stor`. Works with the
+default `$HOME` target too; combine with `-c` to copy instead of linking.
+
+### Interactive mode
+
+Confirm each link/copy/adopt/delete with `-i`:
+
+```shell
+stor -i nvim
+```
+
+## Config
+
+Stor can be configured with TOML files. Config is optional and all fields are optional.
+
+### Global config
+
+`$XDG_CONFIG_HOME/stor/stor.toml` (or `~/.config/stor/stor.toml` if `$XDG_CONFIG_HOME` is not set) applies to all modules:
 
 ```toml
-# Runs before installing module 
-pre_install = "echo 'Installing module...'"
-
-# Runs after all module are installed
-post_install = "read -p 'Press enter to continue...'"
-
-# Runs before removing module
-pre_uninstall = "echo 'Cleaning up...'"
-
-# Runs after module is removed
-post_uninstall = "echo 'Module uninstalled'"
-
 # Patterns to exclude from stor
 ignore = ["**/.git", "**/.DS_Store"]
 ```
 
-You could use `-N` or `--disable-hooks` to disable hooks if you don't like it.
+### Project config
+
+A `stor.toml` located in the root of a module configures that module and merges with the global config:
+
+```toml
+ignore = ["**/.cache"]
+```
+
+The project `stor.toml` itself is never stowed. Patterns from `-I, --ignore` are applied on top of the config.
